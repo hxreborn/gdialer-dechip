@@ -1,0 +1,36 @@
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle-wrapper.jar
+
+# Kotlin
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Android
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Signing
+*.jks
+*.keystore
+keystore.properties
+
+# Logs / scratch
+*.log
+replay_pid*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android Studio inspection output
+iss/

@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.0.0)'
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Verify version properties
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          PROPS_NAME=$(grep '^version\.name=' gradle.properties | cut -d= -f2)
+          if [[ "$PROPS_NAME" != "${TAG#v}" ]]; then
+            echo "::error::gradle.properties has $PROPS_NAME but tag is $TAG"
+            exit 1
+          fi
+
+      - name: Calculate version
+        id: version
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION_NAME="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH _ <<< "$VERSION_NAME"
+          CALCULATED=$((MAJOR * 10000 + MINOR * 1000 + PATCH))
+          PROPS=$(grep '^version\.code=' gradle.properties | cut -d= -f2)
+          VERSION_CODE=$(( CALCULATED > PROPS ? CALCULATED : PROPS ))
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          if [[ "$VERSION_NAME" =~ (rc|alpha|beta) ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decode keystore
+        run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > ${{ github.workspace }}/release.keystore
+
+      - name: Build release APK
+        run: |
+          ./gradlew assembleRelease \
+            -Pversion.name=${{ steps.version.outputs.name }} \
+            -Pversion.code=${{ steps.version.outputs.code }}
+        env:
+          RELEASE_STORE_FILE: ${{ github.workspace }}/release.keystore
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Rename APK
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk \
+            gdialer-dechip-v${{ steps.version.outputs.name }}-arm64-v8a.apk
+
+      - name: Generate release notes
+        id: changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: .github/cliff.toml
+          args: --latest --strip header
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          body: ${{ steps.changelog.outputs.content }}
+          files: gdialer-dechip-v${{ steps.version.outputs.name }}-arm64-v8a.apk
+          fail_on_unmatched_files: true

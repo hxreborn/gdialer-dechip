@@ -1,0 +1,49 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.java]
+indent_size = 4
+continuation_indent_size = 4
+max_line_length = 100
+ij_continuation_indent_size = 4
+ij_java_use_single_class_imports = true
+ij_java_class_count_to_use_import_on_demand = 99
+ij_java_names_count_to_use_import_on_demand = 99
+ij_java_keep_blank_lines_in_code = 1
+ij_java_method_call_chain_wrap = on_every_item
+ij_java_if_brace_force = always
+ij_java_for_brace_force = always
+ij_java_while_brace_force = always
+ij_java_do_while_brace_force = always
+
+[*.kts]
+max_line_length = 120
+
+[*.py]
+indent_size = 4
+max_line_length = 99
+
+[*.sh]
+indent_size = 2
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+
+[*.{toml,properties,json}]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.{xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
