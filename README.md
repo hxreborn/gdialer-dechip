@@ -2,6 +2,10 @@
 
 Removes the "Help us improve" chip from the call list in Google Dialer
 
+<div align="center">
+  <img src="assets/demo.png" alt="Chips removed from the Google Dialer call list" width="320" />
+</div>
+
 ## Requirements
 
 - Android 11+ and Xposed with libxposed 101+ API support
