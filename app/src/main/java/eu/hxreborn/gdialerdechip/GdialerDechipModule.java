@@ -9,11 +9,13 @@ import org.luckypray.dexkit.result.MethodData;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -86,17 +88,62 @@ public final class GdialerDechipModule extends XposedModule {
 
     private void removeFeedbackChips(Object rowModel) {
         try {
-            chipLists(rowModel).forEach(chips -> chips.removeIf(GdialerDechipModule::isFeedbackChip));
-        } catch (Exception e) {
+            for (var field : instanceFields(rowModel.getClass())) {
+                if (List.class.isAssignableFrom(field.getType())) {
+                    stripChips(rowModel, field);
+                } else if (field.getType().getClassLoader() == rowModel.getClass().getClassLoader()
+                    && !field.getType().isEnum()) {
+                    stripNestedChips(field.get(rowModel));
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
             log(Log.WARN, TAG, "chip remove failed", e);
         }
     }
 
-    private static Stream<List<?>> chipLists(Object rowModel) {
-        return Arrays.stream(rowModel.getClass().getDeclaredFields())
-            .filter(field -> List.class.isAssignableFrom(field.getType()))
-            .<List<?>>map(field -> listValue(rowModel, field))
-            .filter(Objects::nonNull);
+    private static void stripNestedChips(Object holder) throws ReflectiveOperationException {
+        if (holder == null) {
+            return;
+        }
+        for (var field : instanceFields(holder.getClass())) {
+            if (List.class.isAssignableFrom(field.getType())) {
+                stripChips(holder, field);
+            }
+        }
+    }
+
+    private static void stripChips(Object owner, Field field) throws ReflectiveOperationException {
+        if (!(field.get(owner) instanceof List<?> chips)) {
+            return;
+        }
+        var kept = chips.stream()
+            .filter(chip -> !isFeedbackChip(chip))
+            .collect(Collectors.toCollection(ArrayList::new));
+        if (kept.size() == chips.size()) {
+            return;
+        }
+        field.set(owner, field.getType().isAssignableFrom(ArrayList.class)
+            ? kept
+            : copyFactory(field.getType()).invoke(null, kept));
+    }
+
+    private static Method copyFactory(Class<?> listType) throws NoSuchMethodException {
+        for (var method : listType.getDeclaredMethods()) {
+            if (Modifier.isStatic(method.getModifiers())
+                && method.getReturnType() == listType
+                && Arrays.equals(method.getParameterTypes(), new Class<?>[] {Collection.class})) {
+                method.setAccessible(true);
+                return method;
+            }
+        }
+        throw new NoSuchMethodException(listType.getName() + " copy factory");
+    }
+
+    private static List<Field> instanceFields(Class<?> type) {
+        return Arrays.stream(type.getDeclaredFields())
+            .filter(field -> !Modifier.isStatic(field.getModifiers()))
+            .peek(field -> field.setAccessible(true))
+            .collect(Collectors.toList());
     }
 
     private static boolean isFeedbackChip(Object chip) {
@@ -107,15 +154,6 @@ public final class GdialerDechipModule extends XposedModule {
             .filter(field -> field.getType().isEnum())
             .map(field -> enumName(chip, field))
             .anyMatch(FEEDBACK_CHIP_KEY::equalsIgnoreCase);
-    }
-
-    private static List<?> listValue(Object owner, Field field) {
-        field.setAccessible(true);
-        try {
-            return field.get(owner) instanceof List<?> list ? list : null;
-        } catch (IllegalAccessException e) {
-            return null;
-        }
     }
 
     private static String enumName(Object owner, Field field) {
