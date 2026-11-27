@@ -1,7 +1,7 @@
 [versions]
-agp = "9.2.1"
+agp = "9.5.3"
 libxposedApi = "102.0.0"
-dexkit = "2.2.0"
+dexkit = "2.3.1"
 
 [libraries]
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposedApi" }
